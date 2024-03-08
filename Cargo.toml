@@ -52,7 +52,7 @@ heapless = { version = "0.8.0", default-features = false, features = ["serde"] }
 esp32c3 = { version = "0.20.0", features = ["critical-section"] }
 embedded-hal-async = "1.0.0"
 embassy-futures = "0.1.1"
-embassy-time = { version = "0.3.0", features = ["tick-hz-16_000_000"] }
+embassy-time = { version = "0.3.0", features = ["tick-hz-1_000_000"] }
 embassy-sync = "0.5.0"
 embedded-graphics = "0.8.1"
 ssd1306 = "0.8.4"

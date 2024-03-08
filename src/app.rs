@@ -1,4 +1,8 @@
-use embassy_futures::select::select;
+pub mod chat;
+pub mod components;
+
+use alloc::collections::VecDeque;
+use embassy_futures::select::{select, Either};
 use embassy_time::Duration;
 use embedded_graphics::{
     draw_target::DrawTarget,
@@ -22,11 +26,15 @@ use ssd1306::{
 use esp32c3_hal::peripherals::I2C0;
 
 use crate::{
+    app::components::{ChatLogComponent, MorseComponent},
     input::{Direction, Input, InputModule},
-    morse::{match_morse, MorseCharacter, MorseDisplay},
-    network::{NetworkDevice, NetworkEvent},
+    module::WithBus,
+    morse::{match_morse, MorseCharacter},
+    network::{NetworkEvent, NetworkMessage, NetworkModule},
     reboot::reboot_download,
 };
+
+use self::chat::ChatLog;
 
 pub struct App {
     display: ssd1306::Ssd1306<
@@ -35,18 +43,19 @@ pub struct App {
         BufferedGraphicsMode<DisplaySize128x64>,
     >,
 
-    network_module: NetworkDevice,
-    input_module: InputModule,
+    network_module: WithBus<NetworkModule>,
+    input_module: WithBus<InputModule>,
 
     input: String<16>,
     morse_buffer: Vec<MorseCharacter, 6>,
+    chat_log: ChatLog,
 }
 
 impl App {
     pub fn init(
         i2c: I2C<'static, I2C0>,
-        input_module: InputModule,
-        network_module: NetworkDevice,
+        input_module: WithBus<InputModule>,
+        network_module: WithBus<NetworkModule>,
     ) -> Self {
         let mut display = Ssd1306::new(
             I2CInterface::new(i2c, 0x3c, 0x40),
@@ -64,15 +73,19 @@ impl App {
             network_module,
 
             morse_buffer: Vec::new(),
+            chat_log: ChatLog::new(),
         }
     }
 
-    fn process_input(&mut self, input: Input) {
+    async fn input_logic(&mut self, input: Input) {
         match input.direction {
             Direction::Right if self.morse_buffer.is_empty() => {
-                // self.network_module.
+                let buffer = core::mem::replace(&mut self.input, String::new());
 
-                self.input.clear();
+                self.chat_log.push_message(chat::From::You, buffer.clone());
+                self.network_module
+                    .send_message(NetworkMessage::Text(buffer))
+                    .await;
             }
             Direction::Right => {
                 let Some(character) = match_morse(&self.morse_buffer) else {
@@ -105,7 +118,12 @@ impl App {
     }
 
     fn process_network(&mut self, event: NetworkEvent) {
-        // log::info!("{event:?}");
+        match event.message {
+            NetworkMessage::Text(text) => self.chat_log.push_message(chat::From::Other, text),
+        }
+
+        let messages = self.chat_log.initialized();
+        log::info!("Messages: {messages:?}");
     }
 
     pub fn draw(&mut self) {
@@ -123,7 +141,8 @@ impl App {
         const TEXT_BOX_SIZE: u32 = 10;
 
         // only draw input box if there's morse input or text in the buffer
-        if !self.input.is_empty() || !self.morse_buffer.is_empty() {
+        let is_input_shown = !self.input.is_empty() || !self.morse_buffer.is_empty();
+        if is_input_shown {
             Rectangle::new(
                 Point::new(0, DISPLAY_HEIGHT - TEXT_BOX_SIZE as i32),
                 Size::new(128, TEXT_BOX_SIZE),
@@ -139,17 +158,38 @@ impl App {
             .draw(&mut self.display)
             .unwrap();
 
-        MorseDisplay::new(&self.morse_buffer, 3, Point::new(60, DISPLAY_HEIGHT - 2))
+        MorseComponent::new(&self.morse_buffer, 3, Point::new(60, DISPLAY_HEIGHT - 2))
             .with_empty_background(true)
+            .draw(&mut self.display)
+            .unwrap();
+
+        let chat_log_pos = match is_input_shown {
+            true => Point::new(0, DISPLAY_HEIGHT - TEXT_BOX_SIZE as i32 - 2),
+            false => Point::new(0, DISPLAY_HEIGHT - 2),
+        };
+
+        ChatLogComponent::new(self.chat_log.messages(), chat_log_pos)
+            .line_spacing(1)
             .draw(&mut self.display)
             .unwrap();
 
         self.display.flush().unwrap();
     }
 
-    pub async fn run(self) -> ! {
+    pub async fn run(mut self) -> ! {
         loop {
-            // select(self.input_module.event(), self.network_module.event())
+            self.draw();
+
+            let event = select(
+                self.input_module.receive_event(),
+                self.network_module.receive_event(),
+            )
+            .await;
+
+            match event {
+                Either::First(input) => self.input_logic(input).await,
+                Either::Second(network) => self.process_network(network),
+            }
         }
     }
 }

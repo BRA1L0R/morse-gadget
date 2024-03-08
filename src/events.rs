@@ -1,7 +1,4 @@
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-
-use crate::{input::Input, network::NetworkEvent};
-
 pub type Bus<T, const N: usize = 10> = Channel<CriticalSectionRawMutex, T, N>;
 
 // #[derive(Debug)]

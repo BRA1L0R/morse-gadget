@@ -4,8 +4,8 @@ use embedded_hal_async::digital::Wait;
 use esp32c3_hal::gpio::{AnyPin, Floating, Input as GpioInput};
 
 use crate::{
-    events::{self},
-    module::{BusModule, Spawnable},
+    events,
+    module::{BusModule, Spawnable, WithBus},
 };
 
 type InputPin = AnyPin<GpioInput<Floating>>;
@@ -80,9 +80,9 @@ impl BusModule for InputModule {
     fn init(
         event_bus: &'static events::Bus<Self::Event>,
         params: Self::Params,
-    ) -> crate::module::Spawnable<Self, impl Sized> {
+    ) -> crate::module::Spawnable<WithBus<Self>, impl Sized> {
         let token = input_task(event_bus, params);
-        Spawnable::new_by_token(Self { _priv: () }, token)
+        Spawnable::new_by_token(WithBus::new(event_bus, Self { _priv: () }), token)
     }
 }
 

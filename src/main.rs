@@ -23,7 +23,7 @@ use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{embassy, Rng, IO};
 use esp32c3_hal::{i2c::I2C, peripherals::WIFI, prelude::*};
 use module::BusModule;
-use network::NetworkDevice;
+use network::NetworkModule;
 
 use esp_backtrace as _;
 use esp_wifi::{initialize, EspWifiInitFor, EspWifiInitialization};
@@ -47,20 +47,7 @@ fn init_heap() {
 }
 
 #[embassy_executor::task]
-async fn main_task(mut app: Box<App>) {
-    // loop {
-    //     app.draw();
-    //     app.run()
-
-    //     // // let event = events::listen_event().await;
-    //     // log::info!("Registering event: {event:?}");
-
-    //     // match event {
-    //     //     Event::Input(input) => app.process_input(input),
-    //     //     Event::Network(network) => app.process_network(network),
-    //     // };
-    // }
-
+async fn main_task(app: Box<App>) {
     app.run().await;
 }
 
@@ -75,7 +62,7 @@ fn run(
 
     move |spawner| {
         let input_module = InputModule::init(&INPUT_BUS, pins).spawn(&spawner);
-        let network_module = NetworkDevice::init(&NETWORK_BUS, (wifi, wifi_token)).spawn(&spawner);
+        let network_module = NetworkModule::init(&NETWORK_BUS, (wifi, wifi_token)).spawn(&spawner);
 
         let app = Box::new(App::init(i2c, input_module, network_module));
         spawner.spawn(main_task(app)).unwrap();
@@ -109,6 +96,8 @@ fn main() -> ! {
     let systimer = SystemTimer::new(peripherals.SYSTIMER);
 
     log::info!("Running at {} clock speed", clocks.cpu_clock);
+    log::info!("APB running at: {}", clocks.apb_clock);
+
     embassy::init(&clocks, TimerGroup::new(peripherals.TIMG0, &clocks));
 
     let i2c = I2C::new(
