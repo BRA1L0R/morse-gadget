@@ -16,7 +16,7 @@ This project was made for my girlfriend as a Valentine's day gift, thus it only 
 
 
 
-## The device
+# The device
 
 ### Demo
 
@@ -25,19 +25,19 @@ This project was made for my girlfriend as a Valentine's day gift, thus it only 
 <img src="./.github/demo.gif"/>
 </details>
 
-### Description
+## Description
 
 It's a pocket-size device that uses **ESP-NOW** to communicate small text messages without the need of an internet connection.
 
 Due to the lack of space to insert a keyboard (who would have guessed) the letters are inputted through **morse**!
 
-### Technologies used
+## Technologies used
 
 The project is based on [**embassy**](docs.rs/embassy). Not using the IDF was a deliberate choice as it concedes me more flexibility on how i poll devices for updates.
 
 Everything is up-to-date with the latest major release of `embedded-hal`.
 
-### Mistakes
+## Mistakes
 
 Oh god, well, a lot actually, ranging from the stupidest up to the funniest.
 
