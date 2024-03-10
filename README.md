@@ -8,18 +8,15 @@ An overly-complicated Valentine's day gift (worth it).
 - USB-C power (no power-delivery)
 - WS2812 Neopixel
 
-<!-- ![The device](./.github/device.jpg) -->
+![The device](./.github/device.jpg)
 
 ## A small inscription
 
 This project was made for my girlfriend as a Valentine's day gift, thus it only feels due mentioning her as the sole purpose and motivation behind this project. It took me quite a bit of time and dedication and I wouldn't have done it for anyone other than her 💜
 
-## Demo (incomplete)
+## Demo
 
-<details>
-<summary>Demo video of the device working</summary>
 ![Video demo](./.github/demovideo.mp4)
-</details>
 
 ## What does it do
 
