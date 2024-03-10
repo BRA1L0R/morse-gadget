@@ -1,7 +1,6 @@
 use alloc::format;
 use embedded_graphics::{
     geometry::{Point, Size},
-    mono_font::{ascii::FONT_5X7, MonoTextStyle},
     pixelcolor::BinaryColor,
     primitives::{PrimitiveStyle, PrimitiveStyleBuilder, Rectangle, StyledDrawable},
     text::Text,
@@ -10,7 +9,7 @@ use embedded_graphics::{
 
 use crate::morse::MorseCharacter;
 
-use super::chat::ChatMessage;
+use super::{chat::ChatMessage, styles::TEXT_STYLE};
 
 pub struct ChatLogComponent<I> {
     messages: I,
@@ -44,14 +43,11 @@ where
     where
         D: embedded_graphics::prelude::DrawTarget<Color = BinaryColor>,
     {
-        const STYLE: MonoTextStyle<'static, BinaryColor> =
-            MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
-
         let mut cursor = self.starting_px;
 
         for message in self.messages {
             let line = format!("{}: {}", message.from, message.text);
-            Text::new(&line, cursor, STYLE).draw(target)?;
+            Text::new(&line, cursor, TEXT_STYLE).draw(target)?;
 
             cursor.y -= 7 + self.line_spacing as i32 // 7 is font size
         }

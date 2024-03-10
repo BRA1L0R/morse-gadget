@@ -18,12 +18,16 @@ use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::embassy::executor::Executor;
 use esp32c3_hal::gpio::AlternateFunction;
 use esp32c3_hal::peripherals::{Peripherals, I2C0};
+use esp32c3_hal::spi::master::Spi;
+use esp32c3_hal::spi::SpiMode;
 use esp32c3_hal::systimer::SystemTimer;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{embassy, Rng, IO};
 use esp32c3_hal::{i2c::I2C, peripherals::WIFI, prelude::*};
 use module::BusModule;
 use network::NetworkModule;
+use smart_leds::RGB;
+use ws2812_spi::Ws2812;
 
 use esp_backtrace as _;
 use esp_wifi::{initialize, EspWifiInitFor, EspWifiInitialization};
@@ -108,7 +112,7 @@ fn main() -> ! {
         &clocks,
     );
 
-    let wifi_token = initialize(
+    let wifi_token: EspWifiInitialization = initialize(
         EspWifiInitFor::Wifi,
         systimer.alarm0,
         Rng::new(peripherals.RNG),
@@ -142,6 +146,14 @@ fn main() -> ! {
         right: io.pins.gpio0.into_floating_input().degrade(),
         up: io.pins.gpio1.into_floating_input().degrade(),
     };
+
+    let spi = Spi::new(peripherals.SPI2, 3_800_000u32.Hz(), SpiMode::Mode0, &clocks)
+        .with_mosi(io.pins.gpio2);
+
+    let mut neopixel = Ws2812::new(spi);
+
+    use smart_leds::SmartLedsWrite;
+    neopixel.write([RGB::new(255u8, 255, 255)]).unwrap();
 
     executor.run(run(i2c, pins, peripherals.WIFI, wifi_token));
 }

@@ -1,13 +1,14 @@
 pub mod chat;
 pub mod components;
+pub mod styles;
 
-use alloc::collections::VecDeque;
+use core::str::FromStr;
+
 use embassy_futures::select::{select, Either};
-use embassy_time::Duration;
+use embassy_time::{Duration, Instant};
 use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{Point, Size},
-    mono_font::{ascii::FONT_5X7, MonoTextStyle},
     pixelcolor::BinaryColor,
     primitives::{Primitive, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::Text,
@@ -26,7 +27,10 @@ use ssd1306::{
 use esp32c3_hal::peripherals::I2C0;
 
 use crate::{
-    app::components::{ChatLogComponent, MorseComponent},
+    app::{
+        components::{ChatLogComponent, MorseComponent},
+        styles::TEXT_STYLE,
+    },
     input::{Direction, Input, InputModule},
     module::WithBus,
     morse::{match_morse, MorseCharacter},
@@ -49,6 +53,8 @@ pub struct App {
     input: String<16>,
     morse_buffer: Vec<MorseCharacter, 6>,
     chat_log: ChatLog,
+
+    typing_indicator: Option<Instant>,
 }
 
 impl App {
@@ -74,6 +80,7 @@ impl App {
 
             morse_buffer: Vec::new(),
             chat_log: ChatLog::new(),
+            typing_indicator: None,
         }
     }
 
@@ -86,15 +93,23 @@ impl App {
                 self.network_module
                     .send_message(NetworkMessage::Text(buffer))
                     .await;
+
+                // sent message: not typing
+                self.network_module
+                    .send_message(NetworkMessage::Typing(false))
+                    .await;
             }
             Direction::Right => {
-                let Some(character) = match_morse(&self.morse_buffer) else {
-                    // todo
-                    return;
-                };
+                let match_morse = match_morse(&self.morse_buffer);
+                let Some(character) = match_morse else { return }; // todo: tell user that the morse char is wrong
 
                 self.morse_buffer.clear();
                 self.input.push(character).ok();
+
+                // someone is typing!
+                self.network_module
+                    .send_message(NetworkMessage::Typing(true))
+                    .await;
             }
             Direction::Down => {
                 let character = MorseCharacter::from(input.duration);
@@ -103,11 +118,16 @@ impl App {
             Direction::Left => {
                 // pop character off morse buffer
                 let pop = self.morse_buffer.pop();
+                let None = pop else { return };
 
                 // if nothing is being written in morse it means user wants to delete text
-                if pop.is_none() {
-                    self.input.pop();
-                }
+                self.input.pop();
+
+                // when user starts deleting text instead of morse send a typing packet
+                // saying it's not typing anymore
+                self.network_module
+                    .send_message(NetworkMessage::Typing(false))
+                    .await;
             }
             Direction::Up if input.duration >= Duration::from_secs(1) => unsafe {
                 reboot_download()
@@ -120,10 +140,13 @@ impl App {
     fn process_network(&mut self, event: NetworkEvent) {
         match event.message {
             NetworkMessage::Text(text) => self.chat_log.push_message(chat::From::Other, text),
+            NetworkMessage::Typing(is_typing) => {
+                self.typing_indicator = is_typing.then(|| Instant::now())
+            }
+            NetworkMessage::Hello => self
+                .chat_log
+                .push_message(chat::From::System, String::from_str("Online!").unwrap()), // todo: better message
         }
-
-        let messages = self.chat_log.initialized();
-        log::info!("Messages: {messages:?}");
     }
 
     pub fn draw(&mut self) {
@@ -153,8 +176,7 @@ impl App {
         }
 
         // Text::new(&self.input, Point::new(2, 60), ;
-        let style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
-        Text::new(&self.input, Point::new(2, DISPLAY_HEIGHT - 3), style)
+        Text::new(&self.input, Point::new(2, DISPLAY_HEIGHT - 3), TEXT_STYLE)
             .draw(&mut self.display)
             .unwrap();
 
@@ -173,10 +195,26 @@ impl App {
             .draw(&mut self.display)
             .unwrap();
 
+        const TYPING_MAX: u64 = 10;
+        if let Some(..=TYPING_MAX) = self
+            .typing_indicator
+            .map(|started| Instant::now() - started)
+            .map(|duration| duration.as_secs())
+        {
+            Text::new("typing...", Point::new(75, 5), TEXT_STYLE)
+                .draw(&mut self.display)
+                .unwrap();
+        }
+
         self.display.flush().unwrap();
     }
 
     pub async fn run(mut self) -> ! {
+        self.network_module
+            // notify everyone of our presence
+            .send_message(NetworkMessage::Hello)
+            .await;
+
         loop {
             self.draw();
 

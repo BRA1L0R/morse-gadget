@@ -6,8 +6,9 @@ use heapless::String;
 #[derive(Debug)]
 pub enum From {
     You,
-    System,
     Other,
+    /// system messages for service information
+    System,
 }
 
 impl Display for From {
@@ -26,6 +27,7 @@ pub struct ChatMessage {
     pub text: String<16>,
 }
 
+/// Circular buffer for messages
 pub struct ChatLog {
     log: Box<[MaybeUninit<ChatMessage>; 8]>,
 
@@ -42,9 +44,9 @@ impl ChatLog {
         }
     }
 
-    pub fn initialized(&self) -> &[ChatMessage] {
-        unsafe { core::mem::transmute(&self.log[..self.used]) }
-    }
+    // pub fn initialized(&self) -> &[ChatMessage] {
+    //     unsafe { core::mem::transmute(&self.log[..self.used]) }
+    // }
 
     pub fn messages(&self) -> impl Iterator<Item = &ChatMessage> {
         self.log[self.index..self.used]

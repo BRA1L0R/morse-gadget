@@ -59,3 +59,5 @@ ssd1306 = "0.8.4"
 
 postcard = "1.0.8"
 serde = { version = "1.0.197", features = ["derive"], default-features = false }
+smart-leds = "0.4.0"
+ws2812-spi = { git = "https://github.com/smart-leds-rs/ws2812-spi-rs.git" }

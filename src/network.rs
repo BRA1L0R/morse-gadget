@@ -17,6 +17,8 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug)]
 pub enum NetworkMessage {
     Text(String<16>),
+    Typing(bool),
+    Hello, // tells the receiver that user just connected their device
 }
 
 #[derive(Debug)]
@@ -45,13 +47,13 @@ pub async fn network_task(
             message,
         };
 
+        log::info!("Received packet: {:?}", event.message);
         event_bus.send(event).await;
-        log::info!("{received:?}");
     }
 }
 
 pub struct NetworkModule {
-    manager: EspNowManager<'static>,
+    _manager: EspNowManager<'static>,
     sender: EspNowSender<'static>,
 
     buffer: Box<[u8; 256]>,
@@ -85,7 +87,7 @@ impl BusModule for NetworkModule {
         let task = network_task(receiver, event_bus);
 
         let module = Self {
-            manager,
+            _manager: manager,
             sender,
             buffer: Box::new([0; 256]),
         };
