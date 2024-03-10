@@ -2,7 +2,10 @@
 
 An overly-complicated Valentine's day gift (worth it).
 
+**PCB design** and code have been entirely done by me.
+
 **SPECS:**
+- Custom hand-held pcb design the size of a credit card
 - RISC-V ESP32 C3 as the brains of the operation
 - SSD1306 equivalent display
 - USB-C power (no power-delivery)
@@ -13,8 +16,6 @@ An overly-complicated Valentine's day gift (worth it).
 ## A small inscription
 
 This project was made for my girlfriend as a Valentine's day gift, thus it only feels due mentioning her as the sole purpose and motivation behind this project. It took me quite a bit of time and dedication and I wouldn't have done it for anyone other than her 💜
-
-
 
 # The device
 
