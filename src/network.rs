@@ -18,7 +18,8 @@ use crate::{
 pub enum NetworkMessage {
     Text(String<16>),
     Typing(bool),
-    Hello, // tells the receiver that user just connected their device
+    Ping, // tells the receiver that user just connected their device
+    Pong, // receiver replies with "I'm here" message
 }
 
 #[derive(Debug)]

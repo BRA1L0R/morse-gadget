@@ -8,8 +8,10 @@ pub mod module;
 pub mod morse;
 pub mod network;
 mod reboot;
+pub mod types;
 
 extern crate alloc;
+
 use alloc::boxed::Box;
 use core::mem::MaybeUninit;
 use embassy_executor::Spawner;
@@ -26,13 +28,14 @@ use esp32c3_hal::{embassy, Rng, IO};
 use esp32c3_hal::{i2c::I2C, peripherals::WIFI, prelude::*};
 use module::BusModule;
 use network::NetworkModule;
-use smart_leds::RGB;
+use types::SmartLedPeripheral;
 use ws2812_spi::Ws2812;
 
 use esp_backtrace as _;
 use esp_wifi::{initialize, EspWifiInitFor, EspWifiInitialization};
 use input::{InputModule, InputPins};
 
+use crate::app::led_indicator::LedIndicator;
 use crate::app::App;
 use crate::events::Bus;
 use crate::input::Input;
@@ -60,6 +63,7 @@ fn run(
     pins: InputPins,
     wifi: WIFI,
     wifi_token: EspWifiInitialization,
+    pixel: SmartLedPeripheral,
 ) -> impl FnOnce(Spawner) {
     static INPUT_BUS: Bus<Input> = Channel::new();
     static NETWORK_BUS: Bus<NetworkEvent> = Channel::new();
@@ -67,8 +71,9 @@ fn run(
     move |spawner| {
         let input_module = InputModule::init(&INPUT_BUS, pins).spawn(&spawner);
         let network_module = NetworkModule::init(&NETWORK_BUS, (wifi, wifi_token)).spawn(&spawner);
+        let pixel = LedIndicator::new(pixel);
 
-        let app = Box::new(App::init(i2c, input_module, network_module));
+        let app = Box::new(App::init(i2c, input_module, network_module, pixel));
         spawner.spawn(main_task(app)).unwrap();
     }
 }
@@ -150,10 +155,6 @@ fn main() -> ! {
     let spi = Spi::new(peripherals.SPI2, 3_800_000u32.Hz(), SpiMode::Mode0, &clocks)
         .with_mosi(io.pins.gpio2);
 
-    let mut neopixel = Ws2812::new(spi);
-
-    use smart_leds::SmartLedsWrite;
-    neopixel.write([RGB::new(255u8, 255, 255)]).unwrap();
-
-    executor.run(run(i2c, pins, peripherals.WIFI, wifi_token));
+    let neopixel: SmartLedPeripheral = Ws2812::new(spi);
+    executor.run(run(i2c, pins, peripherals.WIFI, wifi_token, neopixel));
 }

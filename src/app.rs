@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod components;
+pub mod led_indicator;
 pub mod styles;
 
 use core::str::FromStr;
@@ -36,9 +37,13 @@ use crate::{
     morse::{match_morse, MorseCharacter},
     network::{NetworkEvent, NetworkMessage, NetworkModule},
     reboot::reboot_download,
+    types::SmartLedPeripheral,
 };
 
-use self::chat::ChatLog;
+use self::{
+    chat::ChatLog,
+    led_indicator::{ChatNotificationEffect, LedIndicator},
+};
 
 pub struct App {
     display: ssd1306::Ssd1306<
@@ -49,6 +54,7 @@ pub struct App {
 
     network_module: WithBus<NetworkModule>,
     input_module: WithBus<InputModule>,
+    led: LedIndicator<SmartLedPeripheral>,
 
     input: String<16>,
     morse_buffer: Vec<MorseCharacter, 6>,
@@ -62,6 +68,7 @@ impl App {
         i2c: I2C<'static, I2C0>,
         input_module: WithBus<InputModule>,
         network_module: WithBus<NetworkModule>,
+        led: LedIndicator<SmartLedPeripheral>,
     ) -> Self {
         let mut display = Ssd1306::new(
             I2CInterface::new(i2c, 0x3c, 0x40),
@@ -77,6 +84,7 @@ impl App {
             input: String::new(),
             input_module,
             network_module,
+            led,
 
             morse_buffer: Vec::new(),
             chat_log: ChatLog::new(),
@@ -86,7 +94,7 @@ impl App {
 
     async fn input_logic(&mut self, input: Input) {
         match input.direction {
-            Direction::Right if self.morse_buffer.is_empty() => {
+            Direction::Right if self.morse_buffer.is_empty() && !self.input.is_empty() => {
                 let buffer = core::mem::replace(&mut self.input, String::new());
 
                 self.chat_log.push_message(chat::From::You, buffer.clone());
@@ -137,15 +145,23 @@ impl App {
         }
     }
 
-    fn process_network(&mut self, event: NetworkEvent) {
+    async fn process_network(&mut self, event: NetworkEvent) {
         match event.message {
-            NetworkMessage::Text(text) => self.chat_log.push_message(chat::From::Other, text),
+            NetworkMessage::Text(text) => {
+                self.chat_log.push_message(chat::From::Other, text);
+                self.led.play(ChatNotificationEffect).unwrap();
+            }
             NetworkMessage::Typing(is_typing) => {
                 self.typing_indicator = is_typing.then(|| Instant::now())
             }
-            NetworkMessage::Hello => self
-                .chat_log
-                .push_message(chat::From::System, String::from_str("Online!").unwrap()), // todo: better message
+            NetworkMessage::Ping | NetworkMessage::Pong => {
+                if matches!(event.message, NetworkMessage::Ping) {
+                    self.network_module.send_message(NetworkMessage::Pong).await;
+                }
+
+                self.chat_log
+                    .push_message(chat::From::System, String::from_str("Online!").unwrap());
+            }
         }
     }
 
@@ -212,7 +228,7 @@ impl App {
     pub async fn run(mut self) -> ! {
         self.network_module
             // notify everyone of our presence
-            .send_message(NetworkMessage::Hello)
+            .send_message(NetworkMessage::Ping)
             .await;
 
         loop {
@@ -226,7 +242,7 @@ impl App {
 
             match event {
                 Either::First(input) => self.input_logic(input).await,
-                Either::Second(network) => self.process_network(network),
+                Either::Second(network) => self.process_network(network).await,
             }
         }
     }
